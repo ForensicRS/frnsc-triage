@@ -534,7 +534,6 @@ fn pattern_should_print_all() {
     for element in pattern.into_iter() {
         println!("{}", element);
     }
-    panic!("");
     let pattern = EndPathPattern::new(format!(r"C:\Windows\**")).unwrap();
     for element in pattern.into_iter() {
         println!("{}", element);

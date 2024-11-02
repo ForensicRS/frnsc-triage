@@ -1,16 +1,16 @@
 [package]
 name = "frnsc-triage"
-version = "0.1.0"
+version = "0.13.0"
 edition = "2021"
 
 [dependencies]
-forensic-rs = "0.5.2"
-frnsc-liveregistry-rs = "0.2.0"
-regex = "1.8.4"
-zip = {version = "0.6.6", features = ["deflate"]}
+forensic-rs = "0.13"
+frnsc-liveregistry-rs = "0.13"
+regex = "1"
+zip = {version = "0.6", features = ["deflate"]}
 
 [dependencies.windows]
-version = "0.48"
+version = "0.58"
 features = [
     "Data_Xml_Dom",
     "Win32_Foundation",
