@@ -123,7 +123,7 @@ mod tst {
 
     fn get_registry_reader() -> Box<dyn RegistryReader> {
         let registry = LiveRegistryReader::new();
-        let mut registry : Box<dyn RegistryReader> = Box::new(registry);
+        let registry : Box<dyn RegistryReader> = Box::new(registry);
         registry
     }
     #[test]

@@ -27,6 +27,7 @@ impl RawFile {
         let (disk_pointer, sectors_in_cluster, bytes_per_sector) = get_drive_metadata(&pth, &mut buffer)?;
         let (file_pointer, file_size) = get_file_pointer_and_size(pth, &mut buffer)?;
         let ret_pointers = get_retrieval_pointers(file_pointer, &mut buffer)?;
+        buffer.reset();
         Ok(RawFile {
             disk_pointer,
             file_size,
@@ -94,7 +95,15 @@ impl std::io::Read for RawFile {
         // Move disk position
         move_disk_position(self.disk_pointer, disk_offset)?;
         //Read disk
-        let mut readed_bytes = read_file_from_disk_pointer(self.disk_pointer, &mut self.buffer)?;
+        let cluster_length = ((extent.next_vcn - last_vcn) as u64) * self.buffer_for_cluster as u64;
+        let cluster_offset = self.cluster_i as i64 * self.buffer_for_cluster as i64;
+        let bytes_fit_in_buffer = (clusters_to_read * self.buffer_for_cluster) as u64;
+        let bytes_to_be_readed = if (cluster_length - cluster_offset as u64) < bytes_fit_in_buffer {
+            (cluster_length - cluster_offset as u64) as u32
+        }else {
+            bytes_fit_in_buffer as u32
+        };
+        let mut readed_bytes = read_file_from_disk_pointer(self.disk_pointer, buf, bytes_to_be_readed)?;
         if (self.readed_bytes + readed_bytes as usize) > self.file_size as usize {
             readed_bytes = (self.file_size - self.readed_bytes as u64) as u32;
         }
@@ -138,6 +147,12 @@ mod tst {
         let mut buff = vec![0; 13_000];
         let readed = file.read(&mut buff).unwrap();
         println!("{}", String::from_utf8_lossy(&buff[0..readed]));
+    }
+    #[test]
+    fn am_cache() {
+        let file = super::RawFile::open(r#"C:\Windows\AppCompat\Programs\Amcache.hve"#).unwrap();
+        let destination = std::env::temp_dir().join("Amcache-test.hve");
+        file.copy_to(destination).unwrap();
     }
 
     #[test]

@@ -1,10 +1,8 @@
-use std::{ops::SubAssign, thread::sleep};
-
 use forensic_rs::err::{ForensicError, ForensicResult};
 use windows::{
     core::PCWSTR,
     Win32::{
-        Foundation::{CloseHandle, GENERIC_READ, HANDLE},
+        Foundation::{CloseHandle, ERROR_INSUFFICIENT_BUFFER, GENERIC_READ, HANDLE},
         Storage::FileSystem::{
             CreateFileW, GetDiskFreeSpaceW, GetFileSize, ReadFile, SetFilePointerEx, FILE_BEGIN, FILE_FLAGS_AND_ATTRIBUTES, FILE_READ_ATTRIBUTES, FILE_SHARE_MODE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING
         }, System::{Ioctl::{FSCTL_GET_RETRIEVAL_POINTERS, STARTING_VCN_INPUT_BUFFER}, IO::DeviceIoControl},
@@ -64,8 +62,6 @@ pub fn replace_home_vars(txt: &str, homes: &Vec<String>) -> Vec<String> {
         Some(pos) => pos,
         None => return vec![],
     };
-
-    let variable = &txt[1..pos];
     let mut to_ret = Vec::with_capacity(32);
     for home in homes {
         if home.ends_with(r"\") {
@@ -196,7 +192,6 @@ pub fn get_retrieval_pointers(file_pointer : HANDLE, buffer : &mut Buffer) -> Fo
     let mut bytes_returned = 0;
     let buff = buffer.u8();
     let buffer_size: u32 = buff.len() as u32;
-
     if let Err(e) = unsafe {DeviceIoControl(
         file_pointer,
         FSCTL_GET_RETRIEVAL_POINTERS,
@@ -222,8 +217,28 @@ pub fn move_disk_position(disk_pointer : HANDLE, offset : i64) -> Result<(), std
     Ok(())
 }
 
-pub fn read_file_from_disk_pointer(disk_pointer : HANDLE, buffer : &mut Buffer) -> Result<u32, std::io::Error> {
+pub fn read_file_from_disk_pointer_buffered(disk_pointer : HANDLE, buffer : &mut Buffer, to_be_readed : u32) -> Result<u32, std::io::Error> {
     let buf = buffer.u8();
+    let buf = &mut buf[0..to_be_readed as usize];
+    let mut readed_bytes = 0;
+    if let Err(e) = unsafe {ReadFile(
+        disk_pointer,
+        Some(buf),
+        Some(&mut readed_bytes),
+        None,
+    ) } {
+        let res : i32 = e.code().0;
+        let e = std::io::Error::from_raw_os_error(res);
+        return Err(e);
+    }
+    Ok(readed_bytes)
+}
+
+pub fn read_file_from_disk_pointer(disk_pointer : HANDLE, buf : &mut [u8], to_be_readed : u32) -> Result<u32, std::io::Error> {
+    if buf.len() < to_be_readed as usize {
+        return Err(std::io::Error::from_raw_os_error(ERROR_INSUFFICIENT_BUFFER.0 as _))
+    }
+    let buf = &mut buf[0..to_be_readed as usize];
     let mut readed_bytes = 0;
     if let Err(e) = unsafe {ReadFile(
         disk_pointer,
@@ -280,14 +295,14 @@ pub struct Buffer {
 impl Buffer {
     pub fn new() -> Self {
         Self {
-            u8 : Vec::new(),
-            u16 : Vec::new()
+            u8 : vec![0u8; 1024],
+            u16 : vec![0u16; 1024]
         }
     }
     pub fn with_capacity(size : usize) -> Self {
         Self {
-            u8 : Vec::with_capacity(size),
-            u16 : Vec::with_capacity(size)
+            u8 : vec![0u8; size],
+            u16 :vec![0u16; size]
         }
     }
 
@@ -307,5 +322,19 @@ impl Buffer {
     }
     pub fn u8_vec(&mut self) -> &mut Vec<u8> {
         &mut self.u8
+    }
+    pub fn reset(&mut self) {
+        unsafe {
+            self.u8.set_len(self.u8.capacity());
+            self.u16.set_len(self.u16.capacity());
+        }
+    }
+    pub fn set_len(&mut self, length : usize) {
+        unsafe {
+            let u8l = self.u8.capacity().min(length);
+            self.u8.set_len(u8l);
+            let u16l = self.u16.capacity().min(length);
+            self.u16.set_len(u16l);
+        }
     }
 }
